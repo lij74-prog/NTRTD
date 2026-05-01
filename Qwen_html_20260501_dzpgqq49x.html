@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔧 汽車修理模擬器 Car Mechanic Simulator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  overflow: hidden;
+  height: 100vh;
+  user-select: none;
+}
+
+/* ===== 主選單 ===== */
+#mainMenu {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100vh; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+}
+#mainMenu h1 {
+  font-size: 3em; color: #f39c12; text-shadow: 0 0 20px rgba(243,156,18,0.5);
+  margin-bottom: 10px;
+}
+#mainMenu .subtitle { color: #aaa; font-size: 1.2em; margin-bottom: 40px; }
+.menu-btn {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  color: #fff; border: none; padding: 15px 50px; font-size: 1.3em;
+  border-radius: 8px; cursor: pointer; margin: 8px; transition: all 0.3s;
+  box-shadow: 0 4px 15px rgba(243,156,18,0.3);
+}
+.menu-btn:hover { transform: scale(1.05); box-shadow: 0 6px 25px rgba(243,156,18,0.5); }
+.menu-btn.secondary { background: linear-gradient(135deg, #3498db, #2980b9); box-shadow: 0 4px 15px rgba(52,152,219,0.3); }
+
+/* ===== 遊戲主畫面 ===== */
+#gameScreen { display: none; height: 100vh; flex-direction: column; }
+
+/* 頂部狀態列 */
+#topBar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px; background: linear-gradient(90deg, #16213e, #1a1a2e);
+  border-bottom: 2px solid #f39c12; min-height: 50px;
+}
+#topBar .stat { display: flex; align-items: center; gap: 8px; font-size: 1.1em; }
+#topBar .stat .icon { font-size: 1.4em; }
+#topBar .stat .value { color: #f39c12; font-weight: bold; }
+#topBar .stat .label { color: #888; font-size: 0.85em; }
+.top-btn {
+  background: #e74c3c; color: #fff; border: none; padding: 8px 20px;
+  border-radius: 5px; cursor: pointer; font-size: 1em;
+}
+.top-btn:hover { background: #c0392b; }
+.top-btn.deliver { background: #27ae60; }
+.top-btn.deliver:hover { background: #219a52; }
+
+/* 主要區域 */
+#mainArea {
+  display: flex; flex: 1; overflow: hidden;
+}
+
+/* 左側 - 汽車視圖 */
+#carView {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; position: relative; background: #0d1117;
+  overflow: hidden;
+}
+#carView .floor {
+  position: absolute; bottom: 0; width: 100%; height: 30%;
+  background: linear-gradient(180deg, #2c3e50, #1a252f);
+  border-top: 3px solid #444;
+}
+#carCanvas { position: relative; z-index: 2; }
+
+/* 零件標記 */
+.part-marker {
+  position: absolute; z-index: 3; cursor: pointer;
+  border-radius: 50%; transition: all 0.3s;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7em; font-weight: bold; text-align: center;
+  border: 2px solid transparent;
+}
+.part-marker:hover { transform: scale(1.15); z-index: 10; }
+.part-marker.good { background: rgba(46,204,113,0.3); border-color: #2ecc71; color: #2ecc71; }
+.part-marker.damaged { background: rgba(231,76,60,0.4); border-color: #e74c3c; color: #e74c3c; animation: pulse 1.5s infinite; }
+.part-marker.worn { background: rgba(243,156,18,0.3); border-color: #f39c12; color: #f39c12; }
+.part-marker.missing { background: rgba(155,89,182,0.3); border-color: #9b59b6; color: #9b59b6; }
+.part-marker.selected { box-shadow: 0 0 15px #fff; border-color: #fff; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 右側面板 */
+#sidePanel {
+  width: 350px; background: #16213e; border-left: 2px solid #333;
+  display: flex; flex-direction: column; overflow-y: auto;
+}
+.panel-section {
+  padding: 12px 15px; border-bottom: 1px solid #2a2a4a;
+}
+.panel-section h3 {
+  color: #f39c12; margin-bottom: 8px; font-size: 1em;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* 訂單面板 */
+#orderPanel { background: #1a1a3e; }
+.order-item {
+  background: #0d1117; padding: 10px; border-radius: 5px; margin: 5px 0;
+  border-left: 3px solid #f39c12;
+}
+.order-item .req { color: #e74c3c; font-weight: bold; }
+.order-item .done { color: #2ecc71; font-weight: bold; }
+.order-progress { margin-top: 8px; }
+.progress-bar {
+  height: 8px; background: #333; border-radius: 4px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; background: linear-gradient(90deg, #f39c12, #2ecc71);
+  transition: width 0.5s; border-radius: 4px;
+}
+
+/* 零件列表 */
+#partList { max-height: 250px; overflow-y: auto; }
+.part-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; margin: 3px 0; background: #0d1117;
+  border-radius: 5px; cursor: pointer; transition: all 0.2s;
+}
+.part-item:hover { background: #1a2a3e; }
+.part-item.active { border-left: 3px solid #f39c12; background: #1a2a3e; }
+.part-item .name { font-size: 0.9em; }
+.part-item .status { font-size: 0.8em; padding: 2px 8px; border-radius: 10px; }
+.part-item .status.good { background: #2ecc71; color: #fff; }
+.part-item .status.damaged { background: #e74c3c; color: #fff; }
+.part-item .status.worn { background: #f39c12; color: #fff; }
+.part-item .status.missing { background: #9b59b6; color: #fff; }
+.part-item .health-bar {
+  width: 60px; height: 6px; background: #333; border-radius: 3px; overflow: hidden;
+}
+.part-item .health-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+/* 工具面板 */
+#toolPanel { }
+.tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.tool-btn {
+  padding: 10px 5px; text-align: center; border: 2px solid #333;
+  border-radius: 5px; cursor: pointer; transition: all 0.2s;
+  background: #0d1117; font-size: 0.85em;
+}
+.tool-btn:hover { border-color: #f39c12; }
+.tool-btn.active { border-color: #f39c12; background: #1a2a3e; box-shadow: 0 0 10px rgba(243,156,18,0.3); }
+.tool-btn .tool-icon { font-size: 1.5em; display: block; margin-bottom: 3px; }
+
+/* 動作面板 */
+#actionPanel { }
+.action-btn {
+  width: 100%; padding: 12px; margin: 4px 0; border: none; border-radius: 5px;
+  cursor: pointer; font-size: 1em; font-weight: bold; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.action-btn.diagnose { background: #3498db; color: #fff; }
+.action-btn.diagnose:hover:not(:disabled) { background: #2980b9; }
+.action-btn.remove { background: #e74c3c; color: #fff; }
+.action-btn.remove:hover:not(:disabled) { background: #c0392b; }
+.action-btn.repair { background: #f39c12; color: #fff; }
+.action-btn.repair:hover:not(:disabled) { background: #e67e22; }
+.action-btn.replace { background: #2ecc71; color: #fff; }
+.action-btn.replace:hover:not(:disabled) { background: #27ae60; }
+.action-btn.install { background: #9b59b6; color: #fff; }
+.action-btn.install:hover:not(:disabled) { background: #8e44ad; }
+.action-btn.test { background: #1abc9c; color: #fff; }
+.action-btn.test:hover:not(:disabled) { background: #16a085; }
+
+/* 訊息日誌 */
+#logPanel { max-height: 120px; overflow-y: auto; }
+.log-msg { padding: 3px 0; font-size: 0.85em; border-bottom: 1px solid #222; }
+.log-msg .time { color: #666; }
+.log-msg.success { color: #2ecc71; }
+.log-msg.error { color: #e74c3c; }
+.log-msg.info { color: #3498db; }
+.log-msg.warning { color: #f39c12; }
+
+/* 彈出視窗 */
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #16213e; border: 2px solid #f39c12; border-radius: 10px;
+  padding: 30px; max-width: 500px; width: 90%; text-align: center;
+}
+.modal h2 { color: #f39c12; margin-bottom: 15px; }
+.modal p { margin: 10px 0; line-height: 1.6; }
+.modal .btn-row { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+
+/* 商店 */
+.shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0; }
+.shop-item {
+  background: #0d1117; padding: 12px; border-radius: 8px; cursor: pointer;
+  border: 2px solid #333; transition: all 0.2s;
+}
+.shop-item:hover { border-color: #f39c12; }
+.shop-item .s-name { font-weight: bold; margin-bottom: 5px; }
+.shop-item .s-price { color: #f39c12; font-size: 1.1em; }
+.shop-item .s-desc { color: #888; font-size: 0.8em; margin-top: 3px; }
+
+/* 通知 */
+.notification {
+  position: fixed; top: 60px; right: 20px; padding: 12px 20px;
+  border-radius: 8px; color: #fff; font-weight: bold; z-index: 200;
+  animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+.notification.success { background: #27ae60; }
+.notification.error { background: #e74c3c; }
+.notification.info { background: #3498db; }
+
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { to { opacity: 0; transform: translateY(-20px); } }
+
+/* 動畫 */
+@keyframes carEnter {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.car-enter { animation: carEnter 0.8s ease-out; }
+
+@keyframes wrenchTurn {
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(45deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* 響應式 */
+@media (max-width: 768px) {
+  #mainArea { flex-direction: column; }
+  #sidePanel { width: 100%; max-height: 40vh; }
+  #carView { min-height: 40vh; }
+  #mainMenu h1 { font-size: 2em; }
+}
+
+/* 進度條動畫 */
+.working-bar {
+  position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%);
+  width: 200px; height: 10px; background: #333; border-radius: 5px;
+  overflow: hidden; z-index: 20; display: none;
+}
+.working-bar .fill {
+  height: 100%; background: linear-gradient(90deg, #f39c12, #e67e22);
+  width: 0%; transition: width 0.1s linear;
+}
+.working-label {
+  position: absolute; bottom: calc(20% + 15px); left: 50%; transform: translateX(-50%);
+  color: #f39c12; font-weight: bold; z-index: 20; display: none;
+  white-space: nowrap;
+}
+
+/* 診斷報告 */
+.diagnostic-report {
+  background: #0d1117; padding: 10px; border-radius: 5px; margin-top: 8px;
+  font-size: 0.85em;
+}
+.diag-item { display: flex; justify-content: space-between; padding: 3px 0; }
+.diag-item .name { color: #ccc; }
+.diag-item .val { font-weight: bold; }
+.diag-item .val.ok { color: #2ecc71; }
+.diag-item .val.bad { color: #e74c3c; }
+.diag-item .val.warn { color: #f39c12; }
+
+/* 零件詳情 */
+.part-detail {
+  background: #0d1117; padding: 10px; border-radius: 5px; margin-top: 8px;
+}
+.part-detail .pd-name { font-size: 1.1em; font-weight: bold; color: #f39c12; }
+.part-detail .pd-health { margin: 8px 0; }
+.part-detail .pd-health .bar { height: 12px; background: #333; border-radius: 6px; overflow: hidden; }
+.part-detail .pd-health .bar .fill { height: 100%; transition: width 0.3s; border-radius: 6px; }
+.part-detail .pd-info { font-size: 0.85em; color: #aaa; margin-top: 5px; }
+</style>
+</head>
+<body>
+
+<!-- ===== 主選單 ===== -->
+<div id="mainMenu">
+  <div style="font-size:5em; margin-bottom:10px;">🚗🔧</div>
+  <h1>汽車修理模擬器</h1>
+  <div class="subtitle">Car Mechanic Simulator</div>
+  <button class="menu-btn" onclick="startGame()">🏁 開始遊戲</button>
+  <button class="menu-btn secondary" onclick="showHelp()">📖 遊戲說明</button>
+</div>
+
+<!-- ===== 遊戲畫面 ===== -->
+<div id="gameScreen">
+  <!-- 頂部狀態列 -->
+  <div id="topBar">
+    <div style="display:flex; gap:20px; align-items:center;">
+      <div class="stat"><span class="icon">💰</span><div><div class="value" id="moneyDisplay">$0</div><div class="label">資金</div></div></div>
+      <div class="stat"><span class="icon">⭐</span><div><div class="value" id="repDisplay">0</div><div class="label">聲望</div></div></div>
+      <div class="stat"><span class="icon">📋</span><div><div class="value" id="orderDisplay">0/0</div><div class="label">訂單進度</div></div></div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="top-btn" onclick="openShop()" style="background:#f39c12;">🛒 商店</button>
+      <button class="top-btn deliver" onclick="deliverCar()">✅ 交付車輛</button>
+      <button class="top-btn" onclick="newCar()">🚗 新車輛</button>
+    </div>
+  </div>
+
+  <!-- 主要區域 -->
+  <div id="mainArea">
+    <!-- 汽車視圖 -->
+    <div id="carView">
+      <canvas id="carCanvas" width="600" height="350"></canvas>
+      <div id="partMarkers"></div>
+      <div class="floor"></div>
+      <div class="working-bar" id="workingBar"><div class="fill" id="workingFill"></div></div>
+      <div class="working-label" id="workingLabel"></div>
+    </div>
+
+    <!-- 右側面板 -->
+    <div id="sidePanel">
+      <!-- 訂單 -->
+      <div class="panel-section" id="orderPanel">
+        <h3>📋 修理訂單</h3>
+        <div id="orderList"></div>
+        <div class="order-progress">
+          <div class="progress-bar"><div class="progress-fill" id="orderProgress" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- 零件列表 -->
+      <div class="panel-section">
+        <h3>🔩 汽車零件</h3>
+        <div id="partList"></div>
+      </div>
+
+      <!-- 工具 -->
+      <div class="panel-section" id="toolPanel">
+        <h3>🧰 工具</h3>
+        <div class="tool-grid" id="toolGrid"></div>
+      </div>
+
+      <!-- 零件詳情 -->
+      <div class="panel-section" id="detailPanel" style="display:none;">
+        <h3>📊 零件詳情</h3>
+        <div class="part-detail" id="partDetail"></div>
+      </div>
+
+      <!-- 動作 -->
+      <div class="panel-section" id="actionPanel">
+        <h3>⚡ 操作</h3>
+        <div id="actionButtons"></div>
+      </div>
+
+      <!-- 日誌 -->
+      <div class="panel-section">
+        <h3>📝 工作記錄</h3>
+        <div id="logPanel"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 商店彈窗 ===== -->
+<div class="modal-overlay" id="shopModal">
+  <div class="modal" style="max-width:600px;">
+    <h2>🛒 零件商店</h2>
+    <div class="shop-grid" id="shopGrid"></div>
+    <div class="btn-row">
+      <button class="menu-btn" onclick="closeShop()" style="padding:10px 30px;">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 幫助彈窗 ===== -->
+<div class="modal-overlay" id="helpModal">
+  <div class="modal">
+    <h2>📖 遊戲說明</h2>
+    <p>🔧 你是一名汽車修理技師！接收客戶訂單，修理故障的汽車。</p>
+    <p>📋 每個訂單會列出需要修理的零件問題。</p>
+    <p>🔩 點擊汽車上的零件或右側列表來選擇零件。</p>
+    <p>🧰 選擇正確的工具後，執行診斷、拆卸、修理、更換或安裝操作。</p>
+    <p>💰 完成訂單後交付車輛獲得報酬和聲望。</p>
+    <p>🛒 如果缺少零件，可以到商店購買。</p>
+    <p>⭐ 累積聲望可以接更高價值的訂單！</p>
+    <div class="btn-row">
+      <button class="menu-btn" onclick="closeHelp()" style="padding:10px 30px;">明白了！</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 交付確認 ===== -->
+<div class="modal-overlay" id="deliverModal">
+  <div class="modal">
+    <h2>✅ 交付車輛</h2>
+    <div id="deliverInfo"></div>
+    <div class="btn-row">
+      <button class="menu-btn deliver" onclick="confirmDeliver()" style="padding:10px 30px;">確認交付</button>
+      <button class="menu-btn secondary" onclick="closeDeliver()" style="padding:10px 30px;">再检查一下</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== 遊戲核心 ====================
+
+const PARTS_DATA = [
+  { id:'engine', name:'引擎', icon:'⚙️', x:280, y:120, w:90, h:70, baseHealth:100, repairCost:150, replaceCost:300, diagReq:true },
+  { id:'transmission', name:'變速箱', icon:'🔧', x:170, y:140, w:70, h:50, baseHealth:100, repairCost:120, replaceCost:250, diagReq:true },
+  { id:'battery', name:'電池', icon:'🔋', x:480, y:100, w:50, h:40, baseHealth:100, repairCost:40, replaceCost:80, diagReq:false },
+  { id:'alternator', name:'發電機', icon:'⚡', x:430, y:160, w:45, h:40, baseHealth:100, repairCost:80, replaceCost:160, diagReq:true },
+  { id:'brakes_front', name:'前煞車', icon:'🛑', x:100, y:200, w:55, h:55, baseHealth:100, repairCost:50, replaceCost:100, diagReq:false },
+  { id:'brakes_rear', name:'後煞車', icon:'🛑', x:450, y:200, w:55, h:55, baseHealth:100, repairCost:50, replaceCost:100, diagReq:false },
+  { id:'tire_fl', name:'左前輪', icon:'🛞', x:80, y:240, w:60, h:60, baseHealth:100, repairCost:20, replaceCost:60, diagReq:false },
+  { id:'tire_fr', name:'右前輪', icon:'🛞', x:130, y:240, w:60, h:60, baseHealth:100, repairCost:20, replaceCost:60, diagReq:false },
+  { id:'tire_rl', name:'左後輪', icon:'🛞', x:410, y:240, w:60, h:60, baseHealth:100, repairCost:20, replaceCost:60, diagReq:false },
+  { id:'tire_rr', name:'右後輪', icon:'🛞', x:460, y:240, w:60, h:60, baseHealth:100, repairCost:20, replaceCost:60, diagReq:false },
+  { id:'spark_plugs', name:'火星塞', icon:'🔥', x:320, y:85, w:40, h:30, baseHealth:100, repairCost:30, replaceCost:50, diagReq:true },
+  { id:'oil_filter', name:'機油濾芯', icon:'🛢️', x:250, y:180, w:35, h:35, baseHealth:100, repairCost:15, replaceCost:30, diagReq:false },
+  { id:'air_filter', name:'空氣濾芯', icon:'💨', x:380, y:85, w:40, h:30, baseHealth:100, repairCost:10, replaceCost:25, diagReq:false },
+  { id:'radiator', name:'散熱器', icon:'❄️', x:130, y:90, w:50, h:45, baseHealth:100, repairCost:60, replaceCost:120, diagReq:true },
+  { id:'exhaust', name:'排氣管', icon:'💨', x:500, y:220, w:60, h:30, baseHealth:100, repairCost:45, replaceCost:90, diagReq:false },
+  { id:'suspension', name:'懸吊系統', icon:'🔩', x:200, y:220, w:50, h:40, baseHealth:100, repairCost:70, replaceCost:140, diagReq:true },
+];
+
+const TOOLS = [
+  { id:'hand', name:'手', icon:'🤚', desc:'選擇零件' },
+  { id:'diagnostic', name:'診斷儀', icon:'📱', desc:'檢測零件狀態' },
+  { id:'wrench', name:'扳手', icon:'🔧', desc:'拆卸/安裝' },
+  { id:'screwdriver', name:'螺絲起子', icon:'🪛', desc:'精密拆卸' },
+  { id:'jack', name:'千斤頂', icon:'🏗️', desc:'舉升車輛' },
+  { id:'tester', name:'測試器', icon:'🔌', desc:'測試零件功能' },
+];
+
+const CAR_NAMES = ['Toyota Camry','Honda Civic','Ford Focus','BMW 3 Series','Mercedes C-Class','Audi A4','Nissan Altima','Mazda 3','VW Golf','Subaru Impreza'];
+const CAR_COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#ecf0f1','#34495e','#c0392b'];
+
+let gameState = {
+  money: 500,
+  reputation: 0,
+  currentCar: null,
+  selectedPart: null,
+  selectedTool: 'hand',
+  parts: [],
+  orders: [],
+  inventory: {},
+  logs: [],
+  isWorking: false,
+  carsRepaired: 0,
+};
+
+// ==================== 初始化 ====================
+
+function startGame() {
+  document.getElementById('mainMenu').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'flex';
+  initGame();
+}
+
+function initGame() {
+  gameState.money = 500;
+  gameState.reputation = 0;
+  gameState.inventory = {};
+  gameState.carsRepaired = 0;
+  gameState.logs = [];
+  addLog('歡迎來到汽車修理廠！', 'info');
+  addLog('點擊「新車輛」來接第一個訂單。', 'info');
+  updateUI();
+  initTools();
+  drawCar();
+  newCar();
+}
+
+function newCar() {
+  if (gameState.isWorking) { notify('正在工作中，請稍後！', 'error'); return; }
+  const colorIdx = Math.floor(Math.random() * CAR_COLORS.length);
+  const nameIdx = Math.floor(Math.random() * CAR_NAMES.length);
+  const rep = gameState.reputation;
+
+  // 決定故障零件數量 (隨聲望增加)
+  const numProblems = Math.min(2 + Math.floor(rep / 5), 8);
+  const problemParts = [];
+  const shuffled = [...PARTS_DATA].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < numProblems; i++) {
+    problemParts.push(shuffled[i].id);
+  }
+
+  // 初始化零件
+  gameState.parts = PARTS_DATA.map(p => {
+    let health = 70 + Math.floor(Math.random() * 30); // 預設良好
+    let installed = true;
+    let diagnosed = false;
+
+    if (problemParts.includes(p.id)) {
+      const rand = Math.random();
+      if (rand < 0.4) {
+        health = Math.floor(Math.random() * 25); // 損壞
+      } else if (rand < 0.7) {
+        health = 25 + Math.floor(Math.random() * 30); // 磨損
+      } else {
+        health = 0;
+        installed = false; // 缺失
+      }
+    }
+
+    return {
+      ...p,
+      health,
+      maxHealth: p.baseHealth,
+      installed,
+      diagnosed,
+      status: getPartStatus(health, installed),
+    };
+  });
+
+  // 生成訂單
+  gameState.orders = [];
+  gameState.parts.forEach(p => {
+    if (p.status !== 'good') {
+      gameState.orders.push({
+        partId: p.id,
+        partName: p.name,
+        required: p.status === 'missing' ? '安裝新零件' :
+                  p.status === 'damaged' ? '修理或更換' : '檢查並修理',
+        done: false,
+      });
+    }
+  });
+
+  // 計算報酬
+  let baseReward = 100 + gameState.reputation * 20;
+  let totalCost = 0;
+  gameState.orders.forEach(o => {
+    const part = gameState.parts.find(p => p.id === o.partId);
+    if (part.status === 'missing') totalCost += part.replaceCost;
+    else totalCost += part.repairCost;
+  });
+  gameState.currentCar = {
+    name: CAR_NAMES[nameIdx],
+    color: CAR_COLORS[colorIdx],
+    baseReward,
+    totalCost,
+    reward: baseReward + Math.floor(totalCost * 0.5),
+  };
+
+  gameState.selectedPart = null;
+  gameState.selectedTool = 'hand';
+  updateToolUI();
+  addLog(`🚗 新車輛進廠: ${gameState.currentCar.name}`, 'info');
+  addLog(`📋 收到 ${gameState.orders.length} 個修理項目`, 'warning');
+
+  drawCar();
+  updateUI();
+}
+
+function getPartStatus(health, installed) {
+  if (!installed) return 'missing';
+  if (health < 25) return 'damaged';
+  if (health < 60) return 'worn';
+  return 'good';
+}
+
+// ==================== 繪圖 ====================
+
+function drawCar() {
+  const canvas = document.getElementById('carCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!gameState.currentCar) return;
+
+  const color = gameState.currentCar.color;
+  const cx = 300, cy = 170;
+
+  // 車身陰影
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 80, 220, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 車身下部
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(80, cy + 20);
+  ctx.lineTo(520, cy + 20);
+  ctx.quadraticCurveTo(540, cy + 20, 540, cy - 10);
+  ctx.lineTo(540, cy - 30);
+  ctx.quadraticCurveTo(540, cy - 40, 520, cy - 40);
+  ctx.lineTo(80, cy - 40);
+  ctx.quadraticCurveTo(60, cy - 40, 60, cy - 30);
+  ctx.lineTo(60, cy - 10);
+  ctx.quadraticCurveTo(60, cy + 20, 80, cy + 20);
+  ctx.fill();
+
+  // 車身上部 (車頂)
+  ctx.fillStyle = darkenColor(color, 20);
+  ctx.beginPath();
+  ctx.moveTo(180, cy - 40);
+  ctx.lineTo(220, cy - 100);
+  ctx.quadraticCurveTo(230, cy - 110, 250, cy - 110);
+  ctx.lineTo(380, cy - 110);
+  ctx.quadraticCurveTo(400, cy - 110, 410, cy - 100);
+  ctx.lineTo(450, cy - 40);
+  ctx.fill();
+
+  // 車窗
+  ctx.fillStyle = 'rgba(150,200,255,0.6)';
+  ctx.beginPath();
+  ctx.moveTo(195, cy - 42);
+  ctx.lineTo(230, cy - 95);
+  ctx.lineTo(295, cy - 95);
+  ctx.lineTo(295, cy - 42);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(305, cy - 42);
+  ctx.lineTo(305, cy - 95);
+  ctx.lineTo(400, cy - 95);
+  ctx.lineTo(435, cy - 42);
+  ctx.fill();
+
+  // 車窗邊框
+  ctx.strokeStyle = darkenColor(color, 40);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 車燈
+  ctx.fillStyle = '#fff';
+  ctx.shadowColor = '#fff';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.ellipse(75, cy - 25, 12, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#ff4444';
+  ctx.shadowColor = '#ff4444';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.ellipse(525, cy - 25, 10, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // 輪胎
+  drawWheel(ctx, 130, cy + 30, 28);
+  drawWheel(ctx, 470, cy + 30, 28);
+
+  // 車名
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(gameState.currentCar.name, cx, cy + 70);
+
+  // 引擎蓋線條
+  ctx.strokeStyle = darkenColor(color, 30);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(140, cy - 20);
+  ctx.lineTo(300, cy - 20);
+  ctx.stroke();
+
+  // 車門線條
+  ctx.beginPath();
+  ctx.moveTo(300, cy - 40);
+  ctx.lineTo(300, cy + 20);
+  ctx.stroke();
+
+  // 更新零件標記
+  updatePartMarkers();
+}
+
+function drawWheel(ctx, x, y, r) {
+  // 輪胎
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 輪圈
+  ctx.fillStyle = '#888';
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 輪轂
+  ctx.fillStyle = '#aaa';
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.25, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 輪輻
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(angle) * r * 0.55, y + Math.sin(angle) * r * 0.55);
+    ctx.stroke();
+  }
+}
+
+function darkenColor(hex, amount) {
+  let r = parseInt(hex.slice(1,3), 16);
+  let g = parseInt(hex.slice(3,5), 16);
+  let b = parseInt(hex.slice(5,7), 16);
+  r = Math.max(0, r - amount);
+  g = Math.max(0, g - amount);
+  b = Math.max(0, b - amount);
+  return `rgb(${r},${g},${b})`;
+}
+
+function updatePartMarkers() {
+  const container = document.getElementById('partMarkers');
+  container.innerHTML = '';
+
+  gameState.parts.forEach(part => {
+    if (!part.installed && part.status === 'good') return;
+
+    const marker = document.createElement('div');
+    marker.className = `part-marker ${part.status}`;
+    if (gameState.selectedPart === part.id) marker.classList.add('selected');
+
+    marker.style.left = (part.x - 15) + 'px';
+    marker.style.top = (part.y - 15) + 'px';
+    marker.style.width = '30px';
+    marker.style.height = '30px';
+    marker.innerHTML = part.icon;
+    marker.title = `${part.name} (${part.status})`;
+
+    marker.onclick = () => selectPart(part.id);
+    container.appendChild(marker);
+  });
+}
+
+// ==================== 工具 ====================
+
+function initTools() {
+  const grid = document.getElementById('toolGrid');
+  grid.innerHTML = '';
+  TOOLS.forEach(tool => {
+    const btn = document.createElement('div');
+    btn.className = 'tool-btn' + (tool.id === gameState.selectedTool ? ' active' : '');
+    btn.innerHTML = `<span class="tool-icon">${tool.icon}</span>${tool.name}`;
+    btn.onclick = () => selectTool(tool.id);
+    btn.title = tool.desc;
+    grid.appendChild(btn);
+  });
+}
+
+function updateToolUI() {
+  const btns = document.querySelectorAll('.tool-btn');
+  btns.forEach((btn, i) => {
+    btn.className = 'tool-btn' + (TOOLS[i].id === gameState.selectedTool ? ' active' : '');
+  });
+}
+
+function selectTool(toolId) {
+  if (gameState.isWorking) return;
+  gameState.selectedTool = toolId;
+  updateToolUI();
+  updateActions();
+
+  const tool = TOOLS.find(t => t.id === toolId);
+  addLog(`🧰 切換工具: ${tool.name}`, 'info');
+}
+
+// ==================== 零件操作 ====================
+
+function selectPart(partId) {
+  if (gameState.isWorking) return;
+  gameState.selectedPart = partId;
+  updatePartMarkers();
+  updatePartList();
+  updatePartDetail();
+  updateActions();
+}
+
+function updateActions() {
+  const container = document.getElementById('actionButtons');
+  container.innerHTML = '';
+  const part = gameState.parts.find(p => p.id === gameState.selectedPart);
+
+  if (!part) {
+    container.innerHTML = '<div style="color:#666; text-align:center; padding:15px;">請選擇一個零件</div>';
+    return;
+  }
+
+  const tool = gameState.selectedTool;
+
+  // 診斷
+  const diagBtn = createActionBtn('📱 診斷', 'diagnose', !part.diagnosed && tool === 'diagnostic', () => diagnosePart(part));
+  container.appendChild(diagBtn);
+
+  if (!part.installed) {
+    // 安裝
+    const hasPart = (gameState.inventory[part.id] || 0) > 0;
+    const installBtn = createActionBtn('📦 安裝新零件', 'install', tool === 'wrench' && hasPart, () => installPart(part));
+    container.appendChild(installBtn);
+
+    if (!hasPart) {
+      const buyBtn = createActionBtn(`🛒 購買零件 ($${part.replaceCost})`, 'replace', true, () => buyPart(part));
+      container.appendChild(buyBtn);
+    }
+  } else {
+    // 拆卸
+    const removeBtn = createActionBtn('🔧 拆卸零件', 'remove', tool === 'wrench' && part.status !== 'good', () => removePart(part));
+    container.appendChild(removeBtn);
+
+    // 修理
+    const repairBtn = createActionBtn('🔧 修理零件', 'repair', tool === 'wrench' && part.status === 'damaged' && part.diagnosed, () => repairPart(part));
+    container.appendChild(repairBtn);
+
+    // 更換
+    const hasPart = (gameState.inventory[part.id] || 0) > 0;
+    const replaceBtn = createActionBtn(`📦 更換零件 ($${part.replaceCost})`, 'replace', (tool === 'wrench' || tool === 'screwdriver') && part.status !== 'good' && hasPart, () => replacePart(part));
+    container.appendChild(replaceBtn);
+
+    // 測試
+    const testBtn = createActionBtn('🔌 測試零件', 'test', tool === 'tester' && part.installed, () => testPart(part));
+    container.appendChild(testBtn);
+  }
+}
+
+function createActionBtn(label, cls, enabled, onClick) {
+  const btn = document.createElement('button');
+  btn.className = `action-btn ${cls}`;
+  btn.textContent = label;
+  btn.disabled = !enabled;
+  btn.onclick = onClick;
+  return btn;
+}
+
+// ==================== 零件操作邏輯 ====================
+
+function diagnosePart(part) {
+  if (gameState.isWorking) return;
+  startWork('診斷 ' + part.name + '...', 1500, () => {
+    part.diagnosed = true;
+    const pct = Math.round((part.health / part.maxHealth) * 100);
+    addLog(`📱 診斷完成: ${part.name} - 健康度 ${pct}% [${part.status.toUpperCase()}]`, 'info');
+    showDiagnosticReport(part);
+    updateUI();
+  });
+}
+
+function showDiagnosticReport(part) {
+  const panel = document.getElementById('detailPanel');
+  panel.style.display = 'block';
+  const detail = document.getElementById('partDetail');
+  const pct = Math.round((part.health / part.maxHealth) * 100);
+  const statusClass = part.status === 'good' ? 'ok' : part.status === 'damaged' ? 'bad' : 'warn';
+
+  detail.innerHTML = `
+    <div class="pd-name">${part.icon} ${part.name}</div>
+    <div class="pd-health">
+      <div>健康度: ${pct}%</div>
+      <div class="bar"><div class="fill" style="width:${pct}%; background:${pct > 60 ? '#2ecc71' : pct > 25 ? '#f39c12' : '#e74c3c'}"></div></div>
+    </div>
+    <div class="pd-info">
+      狀態: <span class="diag-item"><span class="name">${part.status.toUpperCase()}</span></span><br>
+      已安裝: ${part.installed ? '✅ 是' : '❌ 否'}<br>
+      修理費用: $${part.repairCost}<br>
+      更換費用: $${part.replaceCost}
+    </div>
+  `;
+}
+
+function removePart(part) {
+  if (gameState.isWorking) return;
+  startWork('拆卸 ' + part.name + '...', 2000, () => {
+    part.installed = false;
+    addLog(`🔧 已拆卸: ${part.name}`, 'warning');
+    updateUI();
+  });
+}
+
+function installPart(part) {
+  if (gameState.isWorking) return;
+  if ((gameState.inventory[part.id] || 0) <= 0) { notify('庫存中沒有此零件！', 'error'); return; }
+  startWork('安裝 ' + part.name + '...', 2000, () => {
+    part.installed = true;
+    part.health = part.maxHealth;
+    part.status = 'good';
+    part.diagnosed = true;
+    gameState.inventory[part.id]--;
+    addLog(`📦 已安裝新零件: ${part.name}`, 'success');
+    checkOrderComplete(part);
+    updateUI();
+  });
+}
+
+function repairPart(part) {
+  if (gameState.isWorking) return;
+  startWork('修理 ' + part.name + '...', 3000, () => {
+    const oldHealth = part.health;
+    part.health = Math.min(part.maxHealth, part.health + 50 + Math.floor(Math.random() * 20));
+    part.status = getPartStatus(part.health, part.installed);
+    gameState.money -= Math.floor(part.repairCost * 0.3);
+    addLog(`🔧 修理完成: ${part.name} (${oldHealth}% → ${Math.round((part.health/part.maxHealth)*100)}%) 花費 $${Math.floor(part.repairCost*0.3)}`, 'success');
+    checkOrderComplete(part);
+    updateUI();
+  });
+}
+
+function replacePart(part) {
+  if (gameState.isWorking) return;
+  if ((gameState.inventory[part.id] || 0) <= 0) { notify('庫存中沒有此零件！', 'error'); return; }
+  startWork('更換 ' + part.name + '...', 2500, () => {
+    part.installed = true;
+    part.health = part.maxHealth;
+    part.status = 'good';
+    part.diagnosed = true;
+    gameState.inventory[part.id]--;
+    gameState.money -= Math.floor(part.replaceCost * 0.8);
+    addLog(`📦 已更換零件: ${part.name} 花費 $${Math.floor(part.replaceCost*0.8)}`, 'success');
+    checkOrderComplete(part);
+    updateUI();
+  });
+}
+
+function testPart(part) {
+  if (gameState.isWorking) return;
+  startWork('測試 ' + part.name + '...', 1500, () => {
+    const pct = Math.round((part.health / part.maxHealth) * 100);
+    if (pct >= 80) {
+      addLog(`🔌 測試結果: ${part.name} 運作正常 (${pct}%) ✅`, 'success');
+    } else if (pct >= 40) {
+      addLog(`🔌 測試結果: ${part.name} 效能下降 (${pct}%) ⚠️`, 'warning');
+    } else {
+      addLog(`🔌 測試結果: ${part.name} 故障！(${pct}%) ❌`, 'error');
+    }
+    updateUI();
+  });
+}
+
+function buyPart(part) {
+  if (gameState.money < part.replaceCost) {
+    notify('資金不足！', 'error');
+    return;
+  }
+  gameState.money -= part.replaceCost;
+  gameState.inventory[part.id] = (gameState.inventory[part.id] || 0) + 1;
+  addLog(`🛒 購買零件: ${part.name} 花費 $${part.replaceCost}`, 'info');
+  notify(`已購買 ${part.name}`, 'success');
+  updateActions();
+  updateUI();
+}
+
+function checkOrderComplete(part) {
+  const order = gameState.orders.find(o => o.partId === part.id);
+  if (order && part.status === 'good' && part.installed) {
+    order.done = true;
+    addLog(`✅ 完成訂單項目: ${part.name}`, 'success');
+    notify(`${part.name} 修理完成！`, 'success');
+  }
+}
+
+// ==================== 商店 ====================
+
+function openShop() {
+  const modal = document.getElementById('shopModal');
+  modal.classList.add('show');
+  const grid = document.getElementById('shopGrid');
+  grid.innerHTML = '';
+
+  PARTS_DATA.forEach(part => {
+    const item = document.createElement('div');
+    item.className = 'shop-item';
+    const inInv = gameState.inventory[part.id] || 0;
+    item.innerHTML = `
+      <div class="s-name">${part.icon} ${part.name}</div>
+      <div class="s-price">$${part.replaceCost}</div>
+      <div class="s-desc">庫存: ${inInv}</div>
+    `;
+    item.onclick = () => {
+      if (gameState.money < part.replaceCost) {
+        notify('資金不足！', 'error');
+        return;
+      }
+      gameState.money -= part.replaceCost;
+      gameState.inventory[part.id] = (gameState.inventory[part.id] || 0) + 1;
+      addLog(`🛒 購買零件: ${part.name} 花費 $${part.replaceCost}`, 'info');
+      notify(`已購買 ${part.name}`, 'success');
+      openShop(); // 刷新
+      updateUI();
+    };
+    grid.appendChild(item);
+  });
+}
+
+function closeShop() {
+  document.getElementById('shopModal').classList.remove('show');
+}
+
+// ==================== 交付 ====================
+
+function deliverCar() {
+  if (!gameState.currentCar) return;
+  const modal = document.getElementById('deliverModal');
+  modal.classList.add('show');
+
+  const totalOrders = gameState.orders.length;
+  const completedOrders = gameState.orders.filter(o => o.done).length;
+  const reward = Math.floor(gameState.currentCar.reward * (completedOrders / Math.max(totalOrders, 1)));
+  const repGain = completedOrders * 2 + (completedOrders === totalOrders ? 5 : 0);
+
+  document.getElementById('deliverInfo').innerHTML = `
+    <p>🚗 車輛: ${gameState.currentCar.name}</p>
+    <p>📋 訂單完成: ${completedOrders}/${totalOrders}</p>
+    <p>💰 預計報酬: <strong style="color:#f39c12; font-size:1.3em;">$${reward}</strong></p>
+    <p>⭐ 聲望提升: <strong style="color:#f39c12;">+${repGain}</strong></p>
+    ${completedOrders === totalOrders ? '<p style="color:#2ecc71; font-size:1.2em; margin-top:10px;">🎉 完美修復！全部完成！</p>' :
+     '<p style="color:#e74c3c; margin-top:10px;">⚠️ 還有未完成的修理項目，報酬將減少。</p>'}
+  `;
+}
+
+function closeDeliver() {
+  document.getElementById('deliverModal').classList.remove('show');
+}
+
+function confirmDeliver() {
+  closeDeliver();
+  const totalOrders = gameState.orders.length;
+  const completedOrders = gameState.orders.filter(o => o.done).length;
+  const reward = Math.floor(gameState.currentCar.reward * (completedOrders / Math.max(totalOrders, 1)));
+  const repGain = completedOrders * 2 + (completedOrders === totalOrders ? 5 : 0);
+
+  gameState.money += reward;
+  gameState.reputation += repGain;
+  gameState.carsRepaired++;
+
+  addLog(`💰 交付車輛獲得 $${reward}`, 'success');
+  addLog(`⭐ 聲望 +${repGain} (總計: ${gameState.reputation})`, 'success');
+  addLog(`🚗 已完成 ${gameState.carsRepaired} 輛車的修理`, 'info');
+
+  notify(`交付成功！+$${reward} ⭐+${repGain}`, 'success');
+
+  gameState.currentCar = null;
+  gameState.parts = [];
+  gameState.orders = [];
+  gameState.selectedPart = null;
+  updateUI();
+  drawCar();
+}
+
+// ==================== 工作動畫 ====================
+
+function startWork(label, duration, callback) {
+  gameState.isWorking = true;
+  const bar = document.getElementById('workingBar');
+  const fill = document.getElementById('workingFill');
+  const lbl = document.getElementById('workingLabel');
+  bar.style.display = 'block';
+  lbl.style.display = 'block';
+  lbl.textContent = label;
+  fill.style.width = '0%';
+
+  const startTime = Date.now();
+  const interval = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const pct = Math.min(100, (elapsed / duration) * 100);
+    fill.style.width = pct + '%';
+    if (elapsed >= duration) {
+      clearInterval(interval);
+      bar.style.display = 'none';
+      lbl.style.display = 'none';
+      gameState.isWorking = false;
+      callback();
+    }
+  }, 50);
+}
+
+// ==================== UI 更新 ====================
+
+function updateUI() {
+  document.getElementById('moneyDisplay').textContent = '$' + gameState.money;
+  document.getElementById('repDisplay').textContent = gameState.reputation;
+
+  const total = gameState.orders.length;
+  const done = gameState.orders.filter(o => o.done).length;
+  document.getElementById('orderDisplay').textContent = total > 0 ? `${done}/${total}` : '-';
+  document.getElementById('orderProgress').style.width = total > 0 ? (done/total*100) + '%' : '0%';
+
+  updateOrderList();
+  updatePartList();
+  updateActions();
+}
+
+function updateOrderList() {
+  const container = document.getElementById('orderList');
+  if (gameState.orders.length === 0) {
+    container.innerHTML = '<div style="color:#666; text-align:center; padding:10px;">目前沒有訂單</div>';
+    return;
+  }
+  container.innerHTML = '';
+  gameState.orders.forEach(order => {
+    const div = document.createElement('div');
+    div.className = 'order-item';
+    div.innerHTML = `
+      <div>${order.partName}</div>
+      <div>需求: <span class="${order.done ? 'done' : 'req'}">${order.done ? '✅ 已完成' : order.required}</span></div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function updatePartList() {
+  const container = document.getElementById('partList');
+  container.innerHTML = '';
+  gameState.parts.forEach(part => {
+    const div = document.createElement('div');
+    div.className = 'part-item' + (gameState.selectedPart === part.id ? ' active' : '');
+    const pct = Math.round((part.health / part.maxHealth) * 100);
+    const statusClass = part.status;
+    const statusText = part.status === 'good' ? '良好' : part.status === 'damaged' ? '損壞' : part.status === 'worn' ? '磨損' : '缺失';
+    const healthColor = pct > 60 ? '#2ecc71' : pct > 25 ? '#f39c12' : '#e74c3c';
+
+    div.innerHTML = `
+      <span style="font-size:1.2em;">${part.icon}</span>
+      <span class="name">${part.name}</span>
+      <div class="health-bar"><div class="health-fill" style="width:${pct}%; background:${healthColor}"></div></div>
+      <span class="status ${statusClass}">${statusText}</span>
+    `;
+    div.onclick = () => selectPart(part.id);
+    container.appendChild(div);
+  });
+}
+
+// ==================== 日誌 ====================
+
+function addLog(msg, type = 'info') {
+  const time = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  gameState.logs.unshift({ msg, type, time });
+  if (gameState.logs.length > 50) gameState.logs.pop();
+  renderLogs();
+}
+
+function renderLogs() {
+  const container = document.getElementById('logPanel');
+  container.innerHTML = '';
+  gameState.logs.slice(0, 20).forEach(log => {
+    const div = document.createElement('div');
+    div.className = `log-msg ${log.type}`;
+    div.innerHTML = `<span class="time">[${log.time}]</span> ${log.msg}`;
+    container.appendChild(div);
+  });
+}
+
+// ==================== 通知 ====================
+
+function notify(msg, type = 'info') {
+  const div = document.createElement('div');
+  div.className = `notification ${type}`;
+  div.textContent = msg;
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 3000);
+}
+
+// ==================== 幫助 ====================
+
+function showHelp() {
+  document.getElementById('helpModal').classList.add('show');
+}
+
+function closeHelp() {
+  document.getElementById('helpModal').classList.remove('show');
+}
+
+// ==================== 鍵盤快捷鍵 ====================
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeShop();
+    closeHelp();
+    closeDeliver();
+  }
+  if (e.key === '1') selectTool('hand');
+  if (e.key === '2') selectTool('diagnostic');
+  if (e.key === '3') selectTool('wrench');
+  if (e.key === '4') selectTool('screwdriver');
+  if (e.key === '5') selectTool('jack');
+  if (e.key === '6') selectTool('tester');
+});
+
+// 防止彈窗點擊關閉
+document.querySelectorAll('.modal-overlay').forEach(modal => {
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('show');
+    }
+  });
+});
+</script>
+</body>
+</html>

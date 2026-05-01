@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>極速修車工：模擬器 2024</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+TC:wght@300;500;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            overflow: hidden;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .header-font { font-family: 'Orbitron', sans-serif; }
+
+        /* 車間背景 */
+        #workshop {
+            position: relative;
+            width: 100%;
+            height: 60vh;
+            background: linear-gradient(to bottom, #333, #111);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 1000px;
+        }
+
+        /* 汽車容器 */
+        .car-container {
+            position: relative;
+            width: 400px;
+            height: 200px;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+        }
+
+        /* 零件通用樣式 */
+        .part {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+
+        .part:hover {
+            filter: brightness(1.2);
+            transform: scale(1.05);
+            z-index: 50;
+        }
+
+        .part.damaged {
+            background-color: #ef4444 !important; /* 紅色代表損壞 */
+            box-shadow: 0 0 15px #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        .part.missing {
+            opacity: 0.2;
+            border: 2px dashed #666;
+            background-color: transparent !important;
+        }
+
+        .part.new {
+            background-color: #22c55e !important; /* 綠色代表全新品 */
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        /* 具體零件位置 */
+        .bodywork { width: 380px; height: 100px; background: #444; border-radius: 50px 80px 20px 20px; top: 20px; left: 10px; opacity: 0.3; pointer-events: none; }
+        .engine { width: 80px; height: 60px; background: #666; top: 40px; left: 60px; border-radius: 5px; }
+        .radiator { width: 15px; height: 50px; background: #555; top: 45px; left: 40px; }
+        .battery { width: 30px; height: 30px; background: #2563eb; top: 40px; left: 145px; }
+        .wheel-fl { width: 50px; height: 50px; background: #222; border-radius: 50%; top: 110px; left: 60px; border: 8px solid #333; }
+        .wheel-fr { width: 50px; height: 50px; background: #222; border-radius: 50%; top: 110px; left: 280px; border: 8px solid #333; }
+        .exhaust { width: 100px; height: 15px; background: #888; top: 115px; left: 330px; border-radius: 0 5px 5px 0; }
+
+        /* UI 面板 */
+        .panel {
+            background: rgba(40, 40, 40, 0.95);
+            border-top: 4px solid #f59e0b;
+        }
+
+        .inventory-slot {
+            width: 80px;
+            height: 80px;
+            background: #333;
+            border: 2px solid #444;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .inventory-slot:hover { border-color: #f59e0b; }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #f59e0b;
+            color: black;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            display: none;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 頂部資訊欄 -->
+    <div class="flex justify-between items-center p-4 bg-black border-b border-yellow-600">
+        <div>
+            <h1 class="header-font text-xl font-bold text-yellow-500">CAR MECHANIC SIM 2024</h1>
+            <p class="text-xs text-gray-400">目前任務：<span id="job-desc">診斷引擎問題</span></p>
+        </div>
+        <div class="flex gap-8 items-center">
+            <div class="text-right">
+                <p class="text-xs text-gray-400">錢包</p>
+                <p class="header-font text-xl text-green-400" id="money">$2,500</p>
+            </div>
+            <div class="text-right">
+                <p class="text-xs text-gray-400">經驗值</p>
+                <p class="header-font text-xl text-blue-400" id="exp">0 XP</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主工作區 -->
+    <div id="workshop">
+        <div class="car-container" id="car">
+            <div class="part bodywork">車殼</div>
+            <div id="part-engine" class="part engine" onclick="handlePartClick('engine')">引擎</div>
+            <div id="part-radiator" class="part radiator" onclick="handlePartClick('radiator')">散熱器</div>
+            <div id="part-battery" class="part battery" onclick="handlePartClick('battery')">電池</div>
+            <div id="part-wheel_fl" class="part wheel-fl" onclick="handlePartClick('wheel_fl')">前輪</div>
+            <div id="part-wheel_fr" class="part wheel-fr" onclick="handlePartClick('wheel_fr')">後輪</div>
+            <div id="part-exhaust" class="part exhaust" onclick="handlePartClick('exhaust')">排氣管</div>
+        </div>
+
+        <!-- 零件資訊浮窗 -->
+        <div id="part-info" class="absolute top-10 left-10 p-4 bg-gray-800 rounded border border-gray-600 hidden">
+            <h3 id="info-name" class="font-bold text-yellow-500">零件名稱</h3>
+            <p id="info-status" class="text-sm">狀態: 100%</p>
+            <div class="mt-2 flex gap-2">
+                <button id="btn-action" class="bg-yellow-600 hover:bg-yellow-700 text-black px-3 py-1 rounded text-xs font-bold">拆卸</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 下方操作面板 -->
+    <div class="panel h-40 w-full fixed bottom-0 flex">
+        <!-- 商店區 -->
+        <div class="w-1/3 p-4 border-r border-gray-700 overflow-y-auto">
+            <h2 class="text-sm font-bold mb-2 text-yellow-500">零件商店</h2>
+            <div class="flex gap-2 flex-wrap">
+                <button onclick="buyPart('engine', 1200)" class="bg-gray-700 hover:bg-gray-600 p-2 text-xs rounded border border-gray-500">引擎 ($1200)</button>
+                <button onclick="buyPart('battery', 150)" class="bg-gray-700 hover:bg-gray-600 p-2 text-xs rounded border border-gray-500">電池 ($150)</button>
+                <button onclick="buyPart('radiator', 300)" class="bg-gray-700 hover:bg-gray-600 p-2 text-xs rounded border border-gray-500">散熱器 ($300)</button>
+                <button onclick="buyPart('wheel', 400)" class="bg-gray-700 hover:bg-gray-600 p-2 text-xs rounded border border-gray-500">輪胎 ($400)</button>
+                <button onclick="buyPart('exhaust', 250)" class="bg-gray-700 hover:bg-gray-600 p-2 text-xs rounded border border-gray-500">排氣管 ($250)</button>
+            </div>
+        </div>
+
+        <!-- 庫存區 -->
+        <div class="w-1/2 p-4 border-r border-gray-700">
+            <h2 class="text-sm font-bold mb-2 text-blue-400">零件庫存</h2>
+            <div id="inventory" class="flex gap-2">
+                <!-- 庫存項目會在此動態生成 -->
+                <p class="text-gray-500 text-xs">空空如也...</p>
+            </div>
+        </div>
+
+        <!-- 任務完成區 -->
+        <div class="w-1/6 p-4 flex flex-col justify-center items-center">
+            <button onclick="finishJob()" id="finish-btn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                交付車輛
+            </button>
+            <p class="text-[10px] mt-2 text-gray-400 text-center">確保所有損壞零件已更換</p>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">提示訊息</div>
+
+    <script>
+        // 遊戲狀態
+        let state = {
+            money: 2500,
+            exp: 0,
+            inventory: [],
+            currentJob: {
+                targetParts: ['engine', 'battery'], // 這場任務需要更換的零件
+                reward: 2000,
+                desc: "客戶反映引擎抖動且難以啟動。更換「引擎」與「電池」。"
+            },
+            carParts: {
+                engine: { name: '引擎', condition: 15, missing: false },
+                radiator: { name: '散熱器', condition: 95, missing: false },
+                battery: { name: '電池', condition: 5, missing: false },
+                wheel_fl: { name: '前輪', condition: 80, missing: false },
+                wheel_fr: { name: '後輪', condition: 75, missing: false },
+                exhaust: { name: '排氣管', condition: 90, missing: false }
+            },
+            selectedPartId: null
+        };
+
+        // 初始化
+        function init() {
+            updateUI();
+            renderCar();
+        }
+
+        // 更新視覺呈現
+        function renderCar() {
+            for (let id in state.carParts) {
+                const partData = state.carParts[id];
+                const el = document.getElementById(`part-${id}`);
+                if (!el) continue;
+
+                // 清除所有狀態類
+                el.classList.remove('damaged', 'missing', 'new');
+
+                if (partData.missing) {
+                    el.classList.add('missing');
+                    el.innerText = "";
+                } else if (partData.condition < 40) {
+                    el.classList.add('damaged');
+                    el.innerText = "!";
+                } else if (partData.condition === 100) {
+                    el.classList.add('new');
+                    el.innerText = "OK";
+                } else {
+                    el.innerText = "";
+                }
+            }
+        }
+
+        // 更新 UI 數據
+        function updateUI() {
+            document.getElementById('money').innerText = `$${state.money}`;
+            document.getElementById('exp').innerText = `${state.exp} XP`;
+            document.getElementById('job-desc').innerText = state.currentJob.desc;
+
+            // 庫存渲染
+            const invEl = document.getElementById('inventory');
+            invEl.innerHTML = "";
+            if (state.inventory.length === 0) {
+                invEl.innerHTML = '<p class="text-gray-500 text-xs">空空如也...</p>';
+            } else {
+                state.inventory.forEach((item, index) => {
+                    const slot = document.createElement('div');
+                    slot.className = "inventory-slot";
+                    slot.innerHTML = `<span class="font-bold">${item.name}</span><span class="text-blue-400">${item.condition}%</span>`;
+                    slot.onclick = () => installPart(index);
+                    invEl.appendChild(slot);
+                });
+            }
+
+            // 檢查交付按鈕
+            const canFinish = state.currentJob.targetParts.every(p => 
+                !state.carParts[p].missing && state.carParts[p].condition >= 90
+            );
+            document.getElementById('finish-btn').disabled = !canFinish;
+        }
+
+        // 點擊零件
+        function handlePartClick(partId) {
+            state.selectedPartId = partId;
+            const part = state.carParts[partId];
+            const infoEl = document.getElementById('part-info');
+            const nameEl = document.getElementById('info-name');
+            const statusEl = document.getElementById('info-status');
+            const btn = document.getElementById('btn-action');
+
+            infoEl.classList.remove('hidden');
+            nameEl.innerText = part.name;
+
+            if (part.missing) {
+                statusEl.innerText = "狀態: 缺失";
+                btn.innerText = "請從庫存安裝";
+                btn.onclick = () => showToast("請點擊下方庫存中的零件進行安裝");
+            } else {
+                statusEl.innerText = `狀態: ${part.condition}%`;
+                btn.innerText = "拆卸零件";
+                btn.onclick = () => removePart(partId);
+            }
+        }
+
+        // 拆卸零件
+        function removePart(id) {
+            const part = state.carParts[id];
+            // 將舊零件放入庫存（模擬廢品）
+            state.inventory.push({ 
+                type: id.replace('_fl', '').replace('_fr', ''), 
+                name: part.name, 
+                condition: part.condition 
+            });
+            
+            state.carParts[id].missing = true;
+            state.carParts[id].condition = 0;
+            
+            document.getElementById('part-info').classList.add('hidden');
+            showToast(`已拆卸 ${part.name}`);
+            renderCar();
+            updateUI();
+        }
+
+        // 安裝零件
+        function installPart(inventoryIndex) {
+            const item = state.inventory[inventoryIndex];
+            
+            // 尋找適合安裝的位置
+            let targetId = null;
+            if (item.type === 'wheel') {
+                // 優先安裝到缺失的輪胎位
+                if (state.carParts['wheel_fl'].missing) targetId = 'wheel_fl';
+                else if (state.carParts['wheel_fr'].missing) targetId = 'wheel_fr';
+            } else {
+                if (state.carParts[item.type] && state.carParts[item.type].missing) {
+                    targetId = item.type;
+                }
+            }
+
+            if (targetId) {
+                state.carParts[targetId].missing = false;
+                state.carParts[targetId].condition = item.condition;
+                state.inventory.splice(inventoryIndex, 1);
+                
+                showToast(`已安裝 ${item.name}`);
+                renderCar();
+                updateUI();
+            } else {
+                showToast("沒有合適的空間安裝此零件，請先拆卸舊零件");
+            }
+        }
+
+        // 購買零件
+        function buyPart(type, price) {
+            if (state.money >= price) {
+                state.money -= price;
+                let name = "";
+                switch(type) {
+                    case 'engine': name = "全新引擎"; break;
+                    case 'battery': name = "全新電池"; break;
+                    case 'radiator': name = "全新散熱器"; break;
+                    case 'wheel': name = "全新輪胎"; break;
+                    case 'exhaust': name = "全新排氣管"; break;
+                }
+                state.inventory.push({ type, name, condition: 100 });
+                showToast(`購買成功: ${name}`);
+                updateUI();
+            } else {
+                showToast("餘額不足！");
+            }
+        }
+
+        // 交付任務
+        function finishJob() {
+            state.money += state.currentJob.reward;
+            state.exp += 250;
+            showToast(`任務完成！獲得酬勞 $${state.currentJob.reward}`);
+            
+            // 生成新任務
+            generateNewJob();
+            updateUI();
+            renderCar();
+        }
+
+        function generateNewJob() {
+            // 隨機損壞一些零件
+            const keys = Object.keys(state.carParts);
+            const targets = [];
+            
+            keys.forEach(k => {
+                const isTarget = Math.random() > 0.6;
+                if (isTarget) {
+                    state.carParts[k].condition = Math.floor(Math.random() * 30);
+                    targets.push(k);
+                } else {
+                    state.carParts[k].condition = 80 + Math.floor(Math.random() * 20);
+                }
+                state.carParts[k].missing = false;
+            });
+
+            if (targets.length === 0) targets.push('exhaust');
+
+            state.currentJob = {
+                targetParts: targets,
+                reward: 1000 + (targets.length * 500),
+                desc: `隨機委託：請修理 ${targets.map(t => state.carParts[t].name).join('、')}。`
+            };
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => {
+                t.style.display = 'none';
+            }, 3000);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
